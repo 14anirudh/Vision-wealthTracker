@@ -9,6 +9,13 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  // Local edit state for breakdown views
+  const [equityEdit, setEquityEdit] = useState(null);
+  const [nonEquityEdit, setNonEquityEdit] = useState(null);
+  const [emergencyEdit, setEmergencyEdit] = useState(null);
+  // Save feedback: 'success' | 'error' | null, and message
+  const [saveStatus, setSaveStatus] = useState(null);
+  const [saveMessage, setSaveMessage] = useState('');
   
   useEffect(() => {
     fetchPortfolio();
@@ -26,21 +33,29 @@ const Dashboard = () => {
     }
   };
   
+  const showSaveFeedback = (status, message) => {
+    setSaveStatus(status);
+    setSaveMessage(message);
+    setTimeout(() => {
+      setSaveStatus(null);
+      setSaveMessage('');
+    }, 3500);
+  };
+
   const handleSubmit = async (formData) => {
     try {
       let response;
       if (portfolio && portfolio._id) {
-        // Update existing portfolio
         response = await portfolioAPI.update(portfolio._id, formData);
       } else {
-        // Create new portfolio
         response = await portfolioAPI.create(formData);
       }
       setPortfolio(response.data);
       setShowForm(false);
+      showSaveFeedback('success', 'Portfolio saved successfully.');
     } catch (error) {
       console.error('Error saving portfolio:', error);
-      alert('Failed to save portfolio. Please try again.');
+      showSaveFeedback('error', 'Failed to save portfolio. Please try again.');
     }
   };
 
@@ -71,10 +86,214 @@ const Dashboard = () => {
 
   const handleCategoryClick = (category) => {
     setSelectedCategory(category);
+    if (category === 'equity' && portfolio?.equity) {
+      setEquityEdit({
+        directStocks: [...(portfolio.equity.directStocks || []).map((s) => ({ ...s }))],
+        mutualFunds: [...(portfolio.equity.mutualFunds || []).map((m) => ({ ...m }))],
+      });
+    }
+    if (category === 'nonEquity' && portfolio?.nonEquity) {
+      setNonEquityEdit({
+        cash: { ...(portfolio.nonEquity.cash || { invested: 0, current: 0 }) },
+        commodities: {
+          gold: { ...(portfolio.nonEquity.commodities?.gold || { invested: 0, current: 0 }) },
+          silver: { ...(portfolio.nonEquity.commodities?.silver || { invested: 0, current: 0 }) },
+        },
+        fixedIncomeAssets: [...(portfolio.nonEquity.fixedIncomeAssets || []).map((a) => ({ ...a }))],
+      });
+    }
+    if (category === 'emergency' && portfolio?.emergency) {
+      setEmergencyEdit({
+        invested: { ...(portfolio.emergency.invested || { investedAmount: 0, currentAmount: 0 }) },
+        bankAccount: { ...(portfolio.emergency.bankAccount || { investedAmount: 0, currentAmount: 0 }) },
+      });
+    }
   };
 
   const handleBackClick = () => {
     setSelectedCategory(null);
+    setEquityEdit(null);
+    setNonEquityEdit(null);
+    setEmergencyEdit(null);
+  };
+
+  const updateEquityDirectStock = (index, field, value) => {
+    if (!equityEdit) return;
+    const updated = [...equityEdit.directStocks];
+    if (!updated[index]) updated[index] = { name: '', invested: 0, current: 0 };
+    updated[index] = { ...updated[index], [field]: field === 'name' ? value : (parseFloat(value) || 0) };
+    setEquityEdit({ ...equityEdit, directStocks: updated });
+  };
+
+  const addEquityDirectStock = () => {
+    if (!equityEdit) return;
+    setEquityEdit({
+      ...equityEdit,
+      directStocks: [...equityEdit.directStocks, { name: '', invested: 0, current: 0 }],
+    });
+  };
+
+  const removeEquityDirectStock = (index) => {
+    if (!equityEdit) return;
+    setEquityEdit({
+      ...equityEdit,
+      directStocks: equityEdit.directStocks.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateEquityMutualFund = (index, field, value) => {
+    if (!equityEdit) return;
+    const updated = [...equityEdit.mutualFunds];
+    if (!updated[index]) updated[index] = { name: '', type: '', invested: 0, current: 0 };
+    const num = parseFloat(value) || 0;
+    if (field === 'name' || field === 'type') {
+      updated[index] = { ...updated[index], name: value, type: value };
+    } else {
+      updated[index] = { ...updated[index], [field]: num };
+    }
+    setEquityEdit({ ...equityEdit, mutualFunds: updated });
+  };
+
+  const addEquityMutualFund = () => {
+    if (!equityEdit) return;
+    setEquityEdit({
+      ...equityEdit,
+      mutualFunds: [...equityEdit.mutualFunds, { name: '', type: '', invested: 0, current: 0 }],
+    });
+  };
+
+  const removeEquityMutualFund = (index) => {
+    if (!equityEdit) return;
+    setEquityEdit({
+      ...equityEdit,
+      mutualFunds: equityEdit.mutualFunds.filter((_, i) => i !== index),
+    });
+  };
+
+  const saveEquityBreakdown = async () => {
+    if (!portfolio?._id || !equityEdit) return;
+    const filteredStocks = equityEdit.directStocks.filter(
+      (s) => (s.name || '').trim() !== '' && (s.invested || s.current)
+    );
+    const filteredMF = equityEdit.mutualFunds.filter(
+      (m) => ((m.name || m.type) || '').trim() !== '' && (m.invested || m.current)
+    );
+    try {
+      const payload = {
+        ...portfolio,
+        equity: { ...portfolio.equity, directStocks: filteredStocks, mutualFunds: filteredMF },
+      };
+      const response = await portfolioAPI.update(portfolio._id, payload);
+      setPortfolio(response.data);
+      setEquityEdit({
+        directStocks: [...(response.data.equity?.directStocks || [])],
+        mutualFunds: [...(response.data.equity?.mutualFunds || [])],
+      });
+      showSaveFeedback('success', 'Changes saved successfully.');
+    } catch (err) {
+      console.error('Error saving equity:', err);
+      showSaveFeedback('error', 'Failed to save. Please try again.');
+    }
+  };
+
+  const setNonEquityField = (path, value, isNumber = false) => {
+    if (!nonEquityEdit) return;
+    const v = isNumber ? (parseFloat(value) || 0) : value;
+    const parts = path.split('.');
+    if (parts[0] === 'cash') {
+      setNonEquityEdit({ ...nonEquityEdit, cash: { ...nonEquityEdit.cash, [parts[1]]: v } });
+    } else if (parts[0] === 'commodities' && parts[1]) {
+      const sub = parts[1];
+      setNonEquityEdit({
+        ...nonEquityEdit,
+        commodities: {
+          ...nonEquityEdit.commodities,
+          [sub]: { ...nonEquityEdit.commodities[sub], [parts[2]]: v },
+        },
+      });
+    }
+  };
+
+  const updateNonEquityFixedIncome = (index, field, value) => {
+    if (!nonEquityEdit) return;
+    const updated = [...nonEquityEdit.fixedIncomeAssets];
+    if (!updated[index]) updated[index] = { name: '', invested: 0, current: 0 };
+    updated[index] = { ...updated[index], [field]: field === 'name' ? value : (parseFloat(value) || 0) };
+    setNonEquityEdit({ ...nonEquityEdit, fixedIncomeAssets: updated });
+  };
+
+  const addNonEquityFixedIncome = () => {
+    if (!nonEquityEdit) return;
+    setNonEquityEdit({
+      ...nonEquityEdit,
+      fixedIncomeAssets: [...nonEquityEdit.fixedIncomeAssets, { name: '', invested: 0, current: 0 }],
+    });
+  };
+
+  const removeNonEquityFixedIncome = (index) => {
+    if (!nonEquityEdit) return;
+    setNonEquityEdit({
+      ...nonEquityEdit,
+      fixedIncomeAssets: nonEquityEdit.fixedIncomeAssets.filter((_, i) => i !== index),
+    });
+  };
+
+  const saveNonEquityBreakdown = async () => {
+    if (!portfolio?._id || !nonEquityEdit) return;
+    const filtered = (nonEquityEdit.fixedIncomeAssets || []).filter(
+      (a) => (a.name || '').trim() !== '' && (a.invested || a.current)
+    );
+    try {
+      const payload = {
+        ...portfolio,
+        nonEquity: {
+          ...portfolio.nonEquity,
+          ...nonEquityEdit,
+          fixedIncomeAssets: filtered,
+        },
+      };
+      const response = await portfolioAPI.update(portfolio._id, payload);
+      setPortfolio(response.data);
+      setNonEquityEdit({
+        cash: { ...(response.data.nonEquity?.cash || {}) },
+        commodities: { ...(response.data.nonEquity?.commodities || {}) },
+        fixedIncomeAssets: [...(response.data.nonEquity?.fixedIncomeAssets || [])],
+      });
+      showSaveFeedback('success', 'Changes saved successfully.');
+    } catch (err) {
+      console.error('Error saving non-equity:', err);
+      showSaveFeedback('error', 'Failed to save. Please try again.');
+    }
+  };
+
+  const setEmergencyField = (section, field, value) => {
+    if (!emergencyEdit) return;
+    const num = parseFloat(value) || 0;
+    if (section === 'invested') {
+      setEmergencyEdit({ ...emergencyEdit, invested: { ...emergencyEdit.invested, [field]: num } });
+    } else {
+      setEmergencyEdit({ ...emergencyEdit, bankAccount: { ...emergencyEdit.bankAccount, [field]: num } });
+    }
+  };
+
+  const saveEmergencyBreakdown = async () => {
+    if (!portfolio?._id || !emergencyEdit) return;
+    try {
+      const payload = {
+        ...portfolio,
+        emergency: { ...portfolio.emergency, ...emergencyEdit },
+      };
+      const response = await portfolioAPI.update(portfolio._id, payload);
+      setPortfolio(response.data);
+      setEmergencyEdit({
+        invested: { ...(response.data.emergency?.invested || {}) },
+        bankAccount: { ...(response.data.emergency?.bankAccount || {}) },
+      });
+      showSaveFeedback('success', 'Changes saved successfully.');
+    } catch (err) {
+      console.error('Error saving emergency:', err);
+      showSaveFeedback('error', 'Failed to save. Please try again.');
+    }
   };
   
   if (loading) {
@@ -96,31 +315,33 @@ const Dashboard = () => {
     );
   }
 
-  const equityTotal = portfolio.equity?.total || 0;
-  const nonEquityTotal = portfolio.nonEquity?.total || 0;
-  const emergencyTotal = portfolio.emergency?.total || 0;
-  const grandTotal = portfolio.grandTotal || 0;
-  const totalInvested = portfolio.invested || 0;
-
+  // Compute totals from nested data so dashboard updates after in-place save (backend may not recalc on findByIdAndUpdate)
   const directStocksTotal = calculateTotal(portfolio.equity?.directStocks);
   const directStocksInvested = calculateTotal(portfolio.equity?.directStocks, 'invested');
   const mutualFundsTotal = calculateTotal(portfolio.equity?.mutualFunds);
   const mutualFundsInvested = calculateTotal(portfolio.equity?.mutualFunds, 'invested');
-  
+  const equityTotal = directStocksTotal + mutualFundsTotal;
+
   const fixedIncomeTotal = calculateTotal(portfolio.nonEquity?.fixedIncomeAssets);
   const fixedIncomeInvested = calculateTotal(portfolio.nonEquity?.fixedIncomeAssets, 'invested');
-  
   const goldCurrent = portfolio.nonEquity?.commodities?.gold?.current || 0;
   const goldInvested = portfolio.nonEquity?.commodities?.gold?.invested || 0;
   const silverCurrent = portfolio.nonEquity?.commodities?.silver?.current || 0;
   const silverInvested = portfolio.nonEquity?.commodities?.silver?.invested || 0;
   const cashCurrent = portfolio.nonEquity?.cash?.current || 0;
   const cashInvested = portfolio.nonEquity?.cash?.invested || 0;
-  
+  const nonEquityTotal = cashCurrent + goldCurrent + silverCurrent + fixedIncomeTotal;
+  const nonEquityInvestedTotal = cashInvested + goldInvested + silverInvested + fixedIncomeInvested;
+
   const emergencyInvestedCurrent = portfolio.emergency?.invested?.currentAmount || 0;
   const emergencyInvestedAmount = portfolio.emergency?.invested?.investedAmount || 0;
   const emergencyBankCurrent = portfolio.emergency?.bankAccount?.currentAmount || 0;
   const emergencyBankAmount = portfolio.emergency?.bankAccount?.investedAmount || 0;
+  const emergencyTotal = emergencyInvestedCurrent + emergencyBankCurrent;
+  const emergencyInvestedTotal = emergencyInvestedAmount + emergencyBankAmount;
+
+  const grandTotal = equityTotal + nonEquityTotal + emergencyTotal;
+  const totalInvested = directStocksInvested + mutualFundsInvested + nonEquityInvestedTotal + emergencyInvestedTotal;
 
   const calculatePercentage = (amount) => {
     if (!grandTotal) return '0.00';
@@ -135,20 +356,33 @@ const Dashboard = () => {
   ];
 
   const equityInvested = directStocksInvested + mutualFundsInvested;
-  const nonEquityInvested = portfolio.nonEquity?.totalInvested || 0;
-  const emergencyInvested = portfolio.emergency?.totalInvested || 0;
+  const nonEquityInvested = nonEquityInvestedTotal;
+  const emergencyInvested = emergencyInvestedTotal;
 
   // Overview View - Show main categories
   if (!selectedCategory) {
     return (
       <div className="min-h-screen p-6">
         <div className="max-w-7xl mx-auto">
+          {/* Save feedback banner */}
+          {saveStatus && (
+            <div
+              className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
+                saveStatus === 'success'
+                  ? 'bg-green-100 text-green-800 border border-green-200'
+                  : 'bg-red-100 text-red-800 border border-red-200'
+              }`}
+              role="alert"
+            >
+              {saveMessage}
+            </div>
+          )}
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-dark">Wealth Portfolio</h1>
             <button
               onClick={() => setShowForm(true)}
-              className="bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm rounded-qxl"
+              className="bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm rounded-xl"
             >
               Edit Portfolio
             </button>
@@ -279,6 +513,19 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-6xl mx-auto">
+        {/* Save feedback banner */}
+        {saveStatus && (
+          <div
+            className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
+              saveStatus === 'success'
+                ? 'bg-green-100 text-green-800 border border-green-200'
+                : 'bg-red-100 text-red-800 border border-red-200'
+            }`}
+            role="alert"
+          >
+            {saveMessage}
+          </div>
+        )}
         {/* Back Button */}
         <button
           onClick={handleBackClick}
@@ -288,147 +535,259 @@ const Dashboard = () => {
           Back to Overview
         </button>
 
-        {/* Equity Details */}
-        {selectedCategory === 'equity' && (
+        {/* Equity Details - editable */}
+        {selectedCategory === 'equity' && equityEdit && (
           <div className="p-5">
-            <h2 className="text-2xl font-bold text-dark mb-5">Equity Breakdown</h2>
-            
-            {/* Direct Stocks */}
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-2xl font-bold text-dark">Equity Breakdown</h2>
+              <button
+                type="button"
+                onClick={saveEquityBreakdown}
+                className="bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm"
+              >
+                Save changes
+              </button>
+            </div>
+
+            {/* Direct Stocks - 3 columns editable, Add at bottom, Remove per row, faint dividers */}
             <div className="mb-6">
-              <div className="flex justify-between items-center mb-3 p-3">
+              <div className="flex justify-between items-center mb-3">
                 <h3 className="text-xl font-semibold text-dark">Direct Stocks</h3>
                 <div className="flex items-center gap-3">
-                  <span className="text-dark font-bold text-base">{formatCurrency(directStocksTotal)}</span>
-                  <GainBadge invested={directStocksInvested} current={directStocksTotal} />
+                  <span className="text-dark font-bold text-base">
+                    {formatCurrency(
+                      equityEdit.directStocks.reduce((s, i) => s + (i.current || 0), 0)
+                    )}
+                  </span>
+                  <GainBadge
+                    invested={equityEdit.directStocks.reduce((s, i) => s + (i.invested || 0), 0)}
+                    current={equityEdit.directStocks.reduce((s, i) => s + (i.current || 0), 0)}
+                  />
                 </div>
               </div>
-              {portfolio.equity?.directStocks?.length > 0 ? (
-                <div className="space-y-2 pl-3">
-                  {portfolio.equity.directStocks.map((stock, index) => (
-                    <div key={index} className="flex justify-between items-center pb-2">
-                      <span className="text-dark font-bold text-base flex-1">{stock.name}</span>
-                      <span className="text-dark flex-1 text-sm">{formatCurrency(stock.invested)} → {formatCurrency(stock.current)}</span>
-                      <div className="flex-1 text-right">
-                        <GainBadge invested={stock.invested} current={stock.current} />
-                      </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 py-2 border-b border-dark/25 text-dark text-sm font-semibold">
+                <span className="pl-3">Name</span>
+                <span className="pl-3">Invested Amount</span>
+                <span className="pl-3">Current Value</span>
+                <span className="w-24" />
+              </div>
+              {equityEdit.directStocks.map((stock, index) => {
+                const gain = (stock.current || 0) - (stock.invested || 0);
+                const gainPct = calculateGainPercentage(stock.invested || 0, stock.current || 0);
+                return (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Stock Name"
+                      value={stock.name || ''}
+                      onChange={(e) => updateEquityDirectStock(index, 'name', e.target.value)}
+                      className="bg-transparent border-0 text-dark text-left pl-3 py-1.5 focus:outline-none rounded-none w-full min-w-0"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Invested"
+                      value={stock.invested === 0 ? '' : stock.invested}
+                      onChange={(e) => updateEquityDirectStock(index, 'invested', e.target.value)}
+                      className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Current"
+                      value={stock.current === 0 ? '' : stock.current}
+                      onChange={(e) => updateEquityDirectStock(index, 'current', e.target.value)}
+                      className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0"
+                    />
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <span className="text-dark text-sm shrink-0">
+                        {gain !== 0 || (stock.invested && stock.current)
+                          ? `${gain >= 0 ? '+' : ''}${formatCurrency(gain).replace('₹', '')} (${gainPct}%)`
+                          : '—'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeEquityDirectStock(index)}
+                        className="text-dark/70 hover:text-dark text-sm font-medium"
+                      >
+                        Remove
+                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-dark opacity-50 pl-3 text-base">No stocks added</div>
-              )}
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={addEquityDirectStock}
+                className="mt-3 bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm"
+              >
+                Add
+              </button>
             </div>
 
-            {/* Mutual Funds */}
+            {/* Mutual Funds - same editable layout */}
             <div>
-              <div className="flex justify-between items-center mb-3 p-3">
+              <div className="flex justify-between items-center mb-3">
                 <h3 className="text-xl font-semibold text-dark">Mutual Funds</h3>
                 <div className="flex items-center gap-3">
-                  <span className="text-dark font-bold text-base">{formatCurrency(mutualFundsTotal)}</span>
-                  <GainBadge invested={mutualFundsInvested} current={mutualFundsTotal} />
+                  <span className="text-dark font-bold text-base">
+                    {formatCurrency(
+                      equityEdit.mutualFunds.reduce((s, i) => s + (i.current || 0), 0)
+                    )}
+                  </span>
+                  <GainBadge
+                    invested={equityEdit.mutualFunds.reduce((s, i) => s + (i.invested || 0), 0)}
+                    current={equityEdit.mutualFunds.reduce((s, i) => s + (i.current || 0), 0)}
+                  />
                 </div>
               </div>
-              {portfolio.equity?.mutualFunds?.length > 0 ? (
-                <div className="space-y-2 pl-3">
-                  {portfolio.equity.mutualFunds.map((mf, index) => (
-                    <div key={index} className="flex justify-between items-center pb-2">
-                      <span className="text-dark font-bold text-base flex-1">{mf.type || mf.name}</span>
-                      <span className="text-dark flex-1 text-sm">{formatCurrency(mf.invested)} → {formatCurrency(mf.current)}</span>
-                      <div className="flex-1 text-right">
-                        <GainBadge invested={mf.invested} current={mf.current} />
-                      </div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 py-2 border-b border-dark/25 text-dark text-sm font-semibold">
+                <span className="pl-3">Name</span>
+                <span className="pl-3">Invested Amount</span>
+                <span className="pl-3">Current Value</span>
+                <span className="w-24" />
+              </div>
+              {equityEdit.mutualFunds.map((mf, index) => {
+                const gain = (mf.current || 0) - (mf.invested || 0);
+                const gainPct = calculateGainPercentage(mf.invested || 0, mf.current || 0);
+                return (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Name / Type"
+                      value={mf.type || mf.name || ''}
+                      onChange={(e) => updateEquityMutualFund(index, 'type', e.target.value)}
+                      className="bg-transparent border-0 text-dark text-left pl-3 py-1.5 focus:outline-none rounded-none w-full min-w-0"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Invested"
+                      value={mf.invested === 0 ? '' : mf.invested}
+                      onChange={(e) => updateEquityMutualFund(index, 'invested', e.target.value)}
+                      className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Current"
+                      value={mf.current === 0 ? '' : mf.current}
+                      onChange={(e) => updateEquityMutualFund(index, 'current', e.target.value)}
+                      className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0"
+                    />
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <span className="text-dark text-sm shrink-0">
+                        {gain !== 0 || (mf.invested && mf.current)
+                          ? `${gain >= 0 ? '+' : ''}${formatCurrency(gain).replace('₹', '')} (${gainPct}%)`
+                          : '—'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeEquityMutualFund(index)}
+                        className="text-dark/70 hover:text-dark text-sm font-medium"
+                      >
+                        Remove
+                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-dark opacity-50 pl-3 text-base">No mutual funds added</div>
-              )}
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={addEquityMutualFund}
+                className="mt-3 bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm"
+              >
+                Add
+              </button>
             </div>
           </div>
         )}
 
-        {/* Non-Equity Details */}
-        {selectedCategory === 'nonEquity' && (
+        {/* Non-Equity Details - editable */}
+        {selectedCategory === 'nonEquity' && nonEquityEdit && (
           <div className="p-5">
-            <h2 className="text-2xl font-bold text-dark mb-5">Non-Equity Breakdown</h2>
-            
-            <div className="space-y-5">
-              {/* Cash */}
-              <div className="flex justify-between items-center pb-3">
-                <span className="text-dark text-base font-bold flex-1">Cash</span>
-                <span className="text-dark flex-1 text-sm">{formatCurrency(cashInvested)} → {formatCurrency(cashCurrent)}</span>
-                <div className="flex-1 text-right">
-                  <GainBadge invested={cashInvested} current={cashCurrent} />
-                </div>
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-2xl font-bold text-dark">Non-Equity Breakdown</h2>
+              <button type="button" onClick={saveNonEquityBreakdown} className="bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm">Save changes</button>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 py-2 border-b border-dark/25 text-dark text-sm font-semibold mb-2">
+              <span className="pl-3">Name</span>
+              <span className="pl-3">Invested</span>
+              <span className="pl-3">Current</span>
+              <span className="w-16" />
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15">
+              <span className="text-dark font-medium pl-3">Cash</span>
+              <input type="number" value={nonEquityEdit.cash?.invested === 0 ? '' : nonEquityEdit.cash?.invested} onChange={(e) => setNonEquityField('cash.invested', e.target.value, true)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Invested" />
+              <input type="number" value={nonEquityEdit.cash?.current === 0 ? '' : nonEquityEdit.cash?.current} onChange={(e) => setNonEquityField('cash.current', e.target.value, true)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Current" />
+              <div className="flex justify-end"><GainBadge invested={nonEquityEdit.cash?.invested || 0} current={nonEquityEdit.cash?.current || 0} /></div>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15">
+              <span className="text-dark font-medium pl-3">Gold</span>
+              <input type="number" value={nonEquityEdit.commodities?.gold?.invested === 0 ? '' : nonEquityEdit.commodities?.gold?.invested} onChange={(e) => setNonEquityField('commodities.gold.invested', e.target.value, true)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Invested" />
+              <input type="number" value={nonEquityEdit.commodities?.gold?.current === 0 ? '' : nonEquityEdit.commodities?.gold?.current} onChange={(e) => setNonEquityField('commodities.gold.current', e.target.value, true)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Current" />
+              <div className="flex justify-end"><GainBadge invested={nonEquityEdit.commodities?.gold?.invested || 0} current={nonEquityEdit.commodities?.gold?.current || 0} /></div>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15">
+              <span className="text-dark font-medium pl-3">Silver</span>
+              <input type="number" value={nonEquityEdit.commodities?.silver?.invested === 0 ? '' : nonEquityEdit.commodities?.silver?.invested} onChange={(e) => setNonEquityField('commodities.silver.invested', e.target.value, true)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Invested" />
+              <input type="number" value={nonEquityEdit.commodities?.silver?.current === 0 ? '' : nonEquityEdit.commodities?.silver?.current} onChange={(e) => setNonEquityField('commodities.silver.current', e.target.value, true)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Current" />
+              <div className="flex justify-end"><GainBadge invested={nonEquityEdit.commodities?.silver?.invested || 0} current={nonEquityEdit.commodities?.silver?.current || 0} /></div>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-xl font-semibold text-dark mb-3">Fixed Income Assets</h3>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 py-2 border-b border-dark/25 text-dark text-sm font-semibold">
+                <span className="pl-3">Name</span>
+                <span className="pl-3">Invested Amount</span>
+                <span className="pl-3">Current Value</span>
+                <span className="w-24" />
               </div>
-
-              {/* Gold */}
-              <div className="flex justify-between items-center pb-3">
-                <span className="text-dark text-base font-bold flex-1">Gold</span>
-                <span className="text-dark flex-1 text-sm">{formatCurrency(goldInvested)} → {formatCurrency(goldCurrent)}</span>
-                <div className="flex-1 text-right">
-                  <GainBadge invested={goldInvested} current={goldCurrent} />
-                </div>
-              </div>
-
-              {/* Silver */}
-              <div className="flex justify-between items-center pb-3">
-                <span className="text-dark text-base font-bold flex-1">Silver</span>
-                <span className="text-dark flex-1 text-sm">{formatCurrency(silverInvested)} → {formatCurrency(silverCurrent)}</span>
-                <div className="flex-1 text-right">
-                  <GainBadge invested={silverInvested} current={silverCurrent} />
-                </div>
-              </div>
-
-              {/* Fixed Income Assets */}
-              <div>
-                <div className="flex justify-between items-center mb-3 p-3">
-                  <span className="text-dark text-xl font-semibold">Fixed Income Assets</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-dark font-bold text-base">{formatCurrency(fixedIncomeTotal)}</span>
-                    <GainBadge invested={fixedIncomeInvested} current={fixedIncomeTotal} />
+              {nonEquityEdit.fixedIncomeAssets?.map((asset, index) => {
+                const gain = (asset.current || 0) - (asset.invested || 0);
+                const gainPct = calculateGainPercentage(asset.invested || 0, asset.current || 0);
+                return (
+                  <div key={index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15">
+                    <input type="text" placeholder="Name" value={asset.name || ''} onChange={(e) => updateNonEquityFixedIncome(index, 'name', e.target.value)} className="bg-transparent border-0 text-dark text-left pl-3 py-1.5 focus:outline-none rounded-none w-full min-w-0" />
+                    <input type="number" placeholder="Invested" value={asset.invested === 0 ? '' : asset.invested} onChange={(e) => updateNonEquityFixedIncome(index, 'invested', e.target.value)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" />
+                    <input type="number" placeholder="Current" value={asset.current === 0 ? '' : asset.current} onChange={(e) => updateNonEquityFixedIncome(index, 'current', e.target.value)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" />
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <span className="text-dark text-sm shrink-0">{gain !== 0 || (asset.invested && asset.current) ? `${gain >= 0 ? '+' : ''}${formatCurrency(gain).replace('₹', '')} (${gainPct}%)` : '—'}</span>
+                      <button type="button" onClick={() => removeNonEquityFixedIncome(index)} className="text-dark/70 hover:text-dark text-sm font-medium">Remove</button>
+                    </div>
                   </div>
-                </div>
-                {portfolio.nonEquity?.fixedIncomeAssets?.length > 0 ? (
-                  <div className="pl-3 space-y-2">
-                    {portfolio.nonEquity.fixedIncomeAssets.map((asset, index) => (
-                      <div key={index} className="flex justify-between items-center pb-2">
-                        <span className="text-dark font-bold text-base flex-1">{asset.name}</span>
-                        <span className="text-dark flex-1 text-sm">{formatCurrency(asset.invested)} → {formatCurrency(asset.current)}</span>
-                        <div className="flex-1 text-right">
-                          <GainBadge invested={asset.invested} current={asset.current} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-dark opacity-50 pl-3 text-base">No fixed income assets added</div>
-                )}
-              </div>
+                );
+              })}
+              <button type="button" onClick={addNonEquityFixedIncome} className="mt-3 bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm">Add</button>
             </div>
           </div>
         )}
 
-        {/* Emergency Fund Details */}
-        {selectedCategory === 'emergency' && (
+        {/* Emergency Fund Details - editable */}
+        {selectedCategory === 'emergency' && emergencyEdit && (
           <div className="p-5">
-            <h2 className="text-2xl font-bold text-dark mb-5">Emergency Fund Breakdown</h2>
-            
-            <div className="space-y-5">
-              <div className="flex justify-between items-center pb-3">
-                <span className="text-dark text-base font-bold flex-1">Invested (Emergency)</span>
-                <span className="text-dark flex-1 text-sm">{formatCurrency(emergencyInvestedAmount)} → {formatCurrency(emergencyInvestedCurrent)}</span>
-                <div className="flex-1 text-right">
-                  <GainBadge invested={emergencyInvestedAmount} current={emergencyInvestedCurrent} />
-                </div>
-              </div>
-              <div className="flex justify-between items-center pb-3">
-                <span className="text-dark text-base font-bold flex-1">Bank Account</span>
-                <span className="text-dark flex-1 text-sm">{formatCurrency(emergencyBankAmount)} → {formatCurrency(emergencyBankCurrent)}</span>
-                <div className="flex-1 text-right">
-                  <GainBadge invested={emergencyBankAmount} current={emergencyBankCurrent} />
-                </div>
-              </div>
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-2xl font-bold text-dark">Emergency Fund Breakdown</h2>
+              <button type="button" onClick={saveEmergencyBreakdown} className="bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm">Save changes</button>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 py-2 border-b border-dark/25 text-dark text-sm font-semibold mb-2">
+              <span className="pl-3">Name</span>
+              <span className="pl-3">Invested</span>
+              <span className="pl-3">Current</span>
+              <span className="w-20" />
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15">
+              <span className="text-dark font-medium pl-3">Invested (Emergency)</span>
+              <input type="number" value={emergencyEdit.invested?.investedAmount === 0 ? '' : emergencyEdit.invested?.investedAmount} onChange={(e) => setEmergencyField('invested', 'investedAmount', e.target.value)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Invested" />
+              <input type="number" value={emergencyEdit.invested?.currentAmount === 0 ? '' : emergencyEdit.invested?.currentAmount} onChange={(e) => setEmergencyField('invested', 'currentAmount', e.target.value)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Current" />
+              <div className="flex justify-end"><GainBadge invested={emergencyEdit.invested?.investedAmount || 0} current={emergencyEdit.invested?.currentAmount || 0} /></div>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-center py-2 border-b border-dark/15">
+              <span className="text-dark font-medium pl-3">Bank Account</span>
+              <input type="number" value={emergencyEdit.bankAccount?.investedAmount === 0 ? '' : emergencyEdit.bankAccount?.investedAmount} onChange={(e) => setEmergencyField('bankAccount', 'investedAmount', e.target.value)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Invested" />
+              <input type="number" value={emergencyEdit.bankAccount?.currentAmount === 0 ? '' : emergencyEdit.bankAccount?.currentAmount} onChange={(e) => setEmergencyField('bankAccount', 'currentAmount', e.target.value)} className="bg-transparent border-0 border-b border-dark/25 text-dark text-left pl-3 py-1.5 focus:outline-none focus:border-dark/50 rounded-none w-full min-w-0" placeholder="Current" />
+              <div className="flex justify-end"><GainBadge invested={emergencyEdit.bankAccount?.investedAmount || 0} current={emergencyEdit.bankAccount?.currentAmount || 0} /></div>
             </div>
           </div>
         )}

@@ -64,4 +64,15 @@ body {
   animation: fadeIn 0.3s ease-in-out;
 }
 
+/* Remove number input spinners (scroll to increase/decrease) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 

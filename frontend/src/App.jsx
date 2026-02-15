@@ -9,7 +9,7 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-bg">
-        <Navbar />
+        {/* <Navbar /> */}
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/category/:categoryName" element={<CategoryView />} />
