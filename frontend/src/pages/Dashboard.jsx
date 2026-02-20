@@ -8,6 +8,7 @@ const Dashboard = () => {
   const [portfolio, setPortfolio] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [noPortfolio, setNoPortfolio] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   // Local edit state for breakdown views
   const [equityEdit, setEquityEdit] = useState(null);
@@ -26,10 +27,15 @@ const Dashboard = () => {
       const response = await portfolioAPI.getCurrent();
       setPortfolio(response.data);
       setLoading(false);
+      setNoPortfolio(false);
     } catch (error) {
       console.error('Error fetching portfolio:', error);
       setLoading(false);
-      setShowForm(true); // Show form if no data exists
+       if (error?.response?.status === 404) {
+         setNoPortfolio(true);
+       } else {
+         setNoPortfolio(false);
+       }
     }
   };
   
@@ -52,6 +58,7 @@ const Dashboard = () => {
       }
       setPortfolio(response.data);
       setShowForm(false);
+      setNoPortfolio(false);
       showSaveFeedback('success', 'Portfolio saved successfully.');
     } catch (error) {
       console.error('Error saving portfolio:', error);
@@ -304,12 +311,31 @@ const Dashboard = () => {
     );
   }
   
-  if (showForm || !portfolio) {
+  if (showForm) {
     return (
       <div className="min-h-screen p-6">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-3xl font-bold text-primary mb-6 text-center">Wealth Portfolio Tracker</h1>
           <WealthForm onSubmit={handleSubmit} initialData={portfolio} />
+        </div>
+      </div>
+    );
+  }
+
+  if (noPortfolio || !portfolio) {
+    return (
+      <div className="min-h-screen p-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-3xl font-bold text-dark mb-4">Wealth Portfolio</h1>
+          <p className="text-dark mb-6">
+            No portfolio saved yet for this account.
+          </p>
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-dark text-white px-6 py-3 font-semibold hover:opacity-80 transition-opacity"
+          >
+            Add Portfolio
+          </button>
         </div>
       </div>
     );

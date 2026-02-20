@@ -5,6 +5,8 @@ import bodyParser from 'body-parser';
 import connectDB from './config/database.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
 import returnsRoutes from './routes/returnsRoutes.js';
+import authRoutes from './routes/authRoutes.js';
+import authMiddleware from './middleware/authMiddleware.js';
 
 dotenv.config();
 
@@ -20,8 +22,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 connectDB();
 
 // Routes
-app.use('/api/portfolio', portfolioRoutes);
-app.use('/api/returns', returnsRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/portfolio', authMiddleware, portfolioRoutes);
+app.use('/api/returns', authMiddleware, returnsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

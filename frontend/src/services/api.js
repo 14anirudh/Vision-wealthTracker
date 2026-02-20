@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -8,6 +8,32 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+const storedToken = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
+
+if (storedToken) {
+  api.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
+}
+
+export const setAuthToken = (token) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (token) {
+    window.localStorage.setItem('token', token);
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    window.localStorage.removeItem('token');
+    delete api.defaults.headers.common.Authorization;
+  }
+};
+
+export const authAPI = {
+  login: (data) => api.post('/auth/login', data),
+  register: (data) => api.post('/auth/register', data),
+  getCurrentUser: () => api.get('/auth/me'),
+};
 
 // Portfolio APIs
 export const portfolioAPI = {

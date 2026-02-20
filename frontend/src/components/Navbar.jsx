@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Wallet } from 'lucide-react';
 
-const Navbar = () => {
+const Navbar = ({ onLogout }) => {
   const location = useLocation();
   
   const isActive = (path) => {
@@ -20,8 +20,8 @@ const Navbar = () => {
               </span>
             </Link>
           </div>
-          
-          {/* <div className="flex space-x-4">
+
+          <div className="flex items-center space-x-4">
             <Link
               to="/"
               className={`px-4 py-2 transition-all duration-200 font-semibold ${
@@ -32,7 +32,14 @@ const Navbar = () => {
             >
               Dashboard
             </Link>
-          </div> */}
+            <button
+              type="button"
+              onClick={onLogout}
+              className="px-4 py-2 bg-dark text-white font-semibold hover:bg-black transition-colors"
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </div>
     </nav>

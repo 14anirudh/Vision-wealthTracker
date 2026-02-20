@@ -3,11 +3,10 @@ import MonthlyReturn from '../models/Returns.js';
 
 const router = express.Router();
 
-// Get monthly returns for a specific period
 router.get('/', async (req, res) => {
   try {
     const { months = 12 } = req.query;
-    const returns = await MonthlyReturn.find({ userId: 'default' })
+    const returns = await MonthlyReturn.find({ userId: req.userId })
       .sort({ year: -1, month: -1 })
       .limit(parseInt(months));
     res.json(returns.reverse());
@@ -16,10 +15,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Add monthly return
 router.post('/', async (req, res) => {
   try {
-    const monthlyReturn = new MonthlyReturn(req.body);
+    const data = {
+      ...req.body,
+      userId: req.userId,
+    };
+    const monthlyReturn = new MonthlyReturn(data);
     const savedReturn = await monthlyReturn.save();
     res.status(201).json(savedReturn);
   } catch (error) {
@@ -27,24 +29,27 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update monthly return
 router.put('/:id', async (req, res) => {
   try {
-    const updatedReturn = await MonthlyReturn.findByIdAndUpdate(
-      req.params.id,
+    const updatedReturn = await MonthlyReturn.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       req.body,
       { new: true }
     );
+
+    if (!updatedReturn) {
+      return res.status(404).json({ message: 'Return entry not found' });
+    }
+
     res.json(updatedReturn);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
-// Get returns summary
 router.get('/summary', async (req, res) => {
   try {
-    const returns = await MonthlyReturn.find({ userId: 'default' })
+    const returns = await MonthlyReturn.find({ userId: req.userId })
       .sort({ year: -1, month: -1 });
     
     const summary = {
