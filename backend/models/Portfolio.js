@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const holdingSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+  name: { type: String, required: true }, 
   invested: { type: Number, required: true },
   current: { type: Number, required: true },
   gain: { type: Number, default: 0 },
