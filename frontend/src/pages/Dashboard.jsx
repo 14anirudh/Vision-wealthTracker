@@ -403,16 +403,6 @@ const Dashboard = () => {
               {saveMessage}
             </div>
           )}
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-dark">Wealth Portfolio</h1>
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm rounded-xl"
-            >
-              Edit Portfolio
-            </button>
-          </div>
 
           {/* Two Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -503,31 +493,39 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Right Section - Donut Chart */}
-            <div className="flex items-center justify-center">
-              <ResponsiveContainer width="100%" height={400}>
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                    outerRadius={120}
-                    innerRadius={60}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value) => formatCurrency(value)}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+            {/* Right Section - Donut Chart and Edit button */}
+            <div className="flex flex-col items-end">
+              <button
+                onClick={() => setShowForm(true)}
+                className="mb-3 bg-dark text-white px-5 py-2 font-semibold hover:opacity-80 transition-opacity text-sm rounded-xl"
+              >
+                Edit Portfolio
+              </button>
+              <div className="w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height={400}>
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                      outerRadius={120}
+                      innerRadius={60}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value) => formatCurrency(value)}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>

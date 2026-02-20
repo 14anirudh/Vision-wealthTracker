@@ -9,25 +9,30 @@ const Navbar = ({ onLogout }) => {
   };
   
   return (
-    <nav className="bg-bg border-b-2 border-dark">
+    <nav className="fixed top-0 inset-x-0 z-40 border-b border-white/20 bg-white/40 backdrop-blur-xl backdrop-saturate-150">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
-              <Wallet className="h-8 w-8 text-dark" />
+            <Link
+              to="/"
+              className="flex items-center space-x-2 transition-transform duration-300 hover:scale-[1.02]"
+            >
+              {/* <Wallet className="h-7 w-7 text-dark" />
+               */}
+               <img src="/logo_square_transparent.png" alt="Vision" className="h-12 w-15" />
               <span className="text-2xl font-bold text-dark">
-                Vision
+                VISION
               </span>
             </Link>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-8 text-sm font-medium">
             <Link
               to="/"
-              className={`px-4 py-2 transition-all duration-200 font-semibold ${
+              className={`transition-colors duration-200 ${
                 isActive('/')
-                  ? 'bg-dark text-white'
-                  : 'text-dark'
+                  ? 'text-blue-600'
+                  : 'text-dark/70 hover:text-blue-600'
               }`}
             >
               Dashboard
@@ -35,7 +40,7 @@ const Navbar = ({ onLogout }) => {
             <button
               type="button"
               onClick={onLogout}
-              className="px-4 py-2 bg-dark text-white font-semibold hover:bg-black transition-colors"
+              className="text-dark/70 hover:text-blue-600 transition-colors duration-200"
             >
               Log out
             </button>

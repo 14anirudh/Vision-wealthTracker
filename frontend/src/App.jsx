@@ -45,45 +45,46 @@ function App() {
     <Router>
       <div className="min-h-screen bg-bg">
         {isAuthenticated && <Navbar onLogout={handleLogout} />}
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              isAuthenticated ? (
-                <Navigate to="/" replace />
-              ) : (
-                <Login onLogin={handleLogin} />
-              )
-            }
-          />
-          <Route
-            path="/"
-            element={
-              isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
-            }
-          />
-          <Route
-            path="/category/:categoryName"
-            element={
-              isAuthenticated ? (
-                <CategoryView />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-          <Route
-            path="/returns"
-            element={
-              isAuthenticated ? <Returns /> : <Navigate to="/login" replace />
-            }
-          />
-        </Routes>
+        <div className={isAuthenticated ? 'pt-16' : ''}>
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/" replace />
+                ) : (
+                  <Login onLogin={handleLogin} />
+                )
+              }
+            />
+            <Route
+              path="/"
+              element={
+                isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+              }
+            />
+            <Route
+              path="/category/:categoryName"
+              element={
+                isAuthenticated ? (
+                  <CategoryView />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
+              path="/returns"
+              element={
+                isAuthenticated ? <Returns /> : <Navigate to="/login" replace />
+              }
+            />
+          </Routes>
+        </div>
       </div>
     </Router>
   );
 }
 
 export default App;
-
 
